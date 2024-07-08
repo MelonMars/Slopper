@@ -1,19 +1,46 @@
+"""
+ :::===  :::      :::====  :::====  :::====  :::===== :::====
+ :::     :::      :::  === :::  === :::  === :::      :::  ===
+  =====  ===      ===  === =======  =======  ======   =======
+     === ===      ===  === ===      ===      ===      === ===
+ ======  ========  ======  ===      ===      ======== ===  ===
+
+https://patorjk.com/software/taag/#p=display&f=USA%20Flag&t=Slopper
+"""
+
+# TODO:
+# -Fix error `OSError: [Errno 22] Invalid argument: 'C:\\Users\\carte\\PycharmProjects\\Slopper\\Slopper\\Did you know that the technology used in F1 cars is some of the most advanced in the world?'`, I THINK IT'S PASSING THE RANDOM TEXT INTO "imgPath"
+# -Fix all warnings
+# -Fix all weak warnings
+# -Fix all typos
+
 from langchain_huggingface.llms import HuggingFacePipeline
 from langchain.prompts import PromptTemplate
-import re, os, glob, cv2, pyttsx3, time
+import re, os, glob, cv2, requests, base64
 from PIL import Image, ImageDraw, ImageFont
 from gtts import gTTS
 from pydub import AudioSegment
-from pydub.playback import play
 from moviepy.editor import VideoFileClip, AudioFileClip
 
-def image_on_text(text:str, imgPath:str):
+
+def image_on_text(text: str, imgPath: str, outputPath: str):
+    counter = 0
+    while True:
+        if counter == 0:
+            new_output_path = outputPath
+        else:
+            base, ext = os.path.splitext(outputPath)
+            new_output_path = f"{base}_{counter}{ext}"
+
+        if not os.path.exists(new_output_path):
+            break
+        counter += 1
+
     with Image.open(imgPath) as img:
         I1 = ImageDraw.Draw(img)
         image_width, image_height = img.size
 
         font = ImageFont.truetype("OpenSans-Bold.ttf", 65)
-        text = "Drink water"
 
         text_bbox = I1.textbbox((0, 0), text, font=font)
         text_width = text_bbox[2] - text_bbox[0]
@@ -25,6 +52,8 @@ def image_on_text(text:str, imgPath:str):
             I1.text((position[0] + offset[0], position[1] + offset[1]), text, font=font, fill=(0, 0, 0))
 
         I1.text(position, text, font=font, fill=(255, 255, 255))
+        img.save(new_output_path)
+
 
 TextMaker = HuggingFacePipeline.from_model_id(
     model_id='microsoft/phi-2',
@@ -32,18 +61,17 @@ TextMaker = HuggingFacePipeline.from_model_id(
     pipeline_kwargs={'max_new_tokens': 250}
 )
 
-prompt = PromptTemplate.from_template(
-    """
+
+prompt = PromptTemplate.from_template("""
 Instruct: You're going to write a short script for an informational short form video. The video will be about the benefits of drinking water. The script should be 30 seconds long. The target audience is adults who are looking to improve their health. The script should be informative and engaging. The video will be around 30 seconds long. Place prompts for an ai image generator in brackets between text, [like this]. Don't have someone saying the text, simply write the text.
 Output: [Refreshing image of water] Did you know that drinking water for can help you lose weight? [Image of a scale] Water can also help you stay focused and energized throughout the day. [Image of a person working]. So next time you're feeling tired or hungry, try drinking a glass of water. [Image of a person drinking water]. Your body will thank you. [Image of a happy person]. Stay hydrated and stay healthy. [Image of a water bottle].
 Instruct: "You're goal is to write a short script about for an informational short form video. The video will be about {tag}. The script should be 30 seconds long. The target audience is {tag}. The script should be informative and engaging. The video will be around 30 seconds long. Place prompts for an ai image generator in brackets between text, [like this]. Don't have someone saying the text, simply write the text."
-Output: 
-"""
-)
+Output: """,)
 
 chain = prompt | TextMaker
 script = chain.invoke({"tag": "The technology of an F1 Car"})
-#[Image of an F1 car] Did you know that the technology used in F1 cars is some of the most advanced in the world? [Image of a car engine] The engines used in F1 cars are designed to be incredibly powerful and efficient. [Image of a car on a track] The aerodynamics of F1 cars are also incredibly advanced, allowing them to reach incredible speeds. [Image of a car on a track] So next time you see an F1 car, remember that it's not just a car, it's a work of art. [Image of an F1 car] The technology used in F1 cars is truly amazing. [Image of a car on a track] Stay tuned for more information on the technology of F1 cars. [Image of a car on a track]
+script = script.replace(prompt.format(tag="The technology of an F1 Car"), "")
+
 
 imageList = re.findall(r'\[.*?\]', script)
 imageList = [image.replace("[", "").replace("]", "").replace("\"", "") for image in imageList]
@@ -51,11 +79,28 @@ print(script, "\n", imageList)
 
 folder = os.getcwd()
 length_per_img = 0.25
-#Make images, put into a folder (can't test imageTest, bc my wifi is horrendous rn)
-#Save ALL images as the description of the image, no spaces, .jpg (e.g. [Refreshing image of water] -> Refreshingimageofwater.jpg)
 
-#Add text to images -- Untested (tested only for one image at a time), hope this works.
-images = glob.glob(os.path.join(folder, "*.jpg"))
+for image in imageList:
+    headers = {
+        "accept": "application/json",
+        "Content-Type": "application/json"
+    }
+    data = {
+        "prompt": image,
+        "steps": 5
+    }
+
+    print(data)
+    response = requests.post(url='http://127.0.0.1:7862/sdapi/v1/txt2img', json=data, headers=headers)
+    with open(image.replace(" ", "") + ".png", 'wb') as f:
+        try:
+            f.write(base64.b64decode(response.json()['images'][0]))
+        except:
+            print("Error: ", response.json())
+
+# Add text to images -- Untested (tested only for one image at a time), hope this works.
+images = [image in glob.glob(os.path.join(folder, "*.png"))]
+#  if image.startswith("output_") else None
 
 pattern = re.compile(r'\[(.*?)\] (.*?)(?=\[|$)')
 matches = pattern.findall(script)
@@ -63,12 +108,11 @@ matches = pattern.findall(script)
 for i, (image_desc, text) in enumerate(matches):
     if i < len(images):
         image_path = images[i]
-        output_path = f"output_{i}.jpg"
+        output_path = f"output_{i}.png"
         image_on_text(image_path, text.strip(), output_path)
 
-
 #Concat images into video -- Untested, hope this works.
-mimages = [img for img in os.listdir(folder) if img.endswith(".jpg")] #mimages -> Modified IMAGES
+mimages = [img for img in os.listdir(folder) if img.endswith(".png")]  #mimages -> Modified IMAGES
 fps = 1 / length_per_img
 
 frame = cv2.imread(os.path.join(folder, images[0]))

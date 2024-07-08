@@ -1,8 +1,4 @@
 # Didn't even want these things & now I can't delete them 💀
 onnx-stable-diffusion-v1-5
-onnx-stable-diffusion-v1-5/unet/model.onnx_data
-onnx-stable-diffusion-v1-5/vae_decoder/config.json
-onnx-stable-diffusion-v1-5/vae_decoder/model.onnx
-onnx-stable-diffusion-v1-5/vae_encoder/config.json
-onnx-stable-diffusion-v1-5/vae_encoder/model.onnx
 *.onnx
+*.png
