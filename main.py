@@ -26,7 +26,7 @@ import pyttsx3
 from PIL import Image, ImageDraw, ImageFont
 from gtts import gTTS
 from pydub import AudioSegment
-from moviepy.editor import VideoFileClip, AudioFileClip
+from moviepy.editor import VideoFileClip, AudioFileClip, CompositeVideoClip
 
 
 def get_numeric_part(filename):
@@ -72,7 +72,7 @@ def image_on_text(txt: str, imgPath: str, outputPath: str):
         return False
 
 
-def create_script(model: str, max_new_tokens: int) -> str:
+def create_script(model: str, max_new_tokens: int, tag: str) -> str:
     TextMaker = HuggingFacePipeline.from_model_id(
         model_id=model,
         task='text-generation',
@@ -86,14 +86,10 @@ def create_script(model: str, max_new_tokens: int) -> str:
     Output: """, )
 
     chain = prompt | TextMaker
-    script = chain.invoke({"tag": "The technology of an F1 Car"})
-    script = script.replace(prompt.format(tag="The technology of an F1 Car"), "")
+    script = chain.invoke({"tag": tag})
+    script = script.replace(prompt.format(tag=tag), "")
 
     return script
-
-
-folder = os.getcwd()
-length_per_img = 0.25
 
 
 def create_images(script: str, folder: str):
@@ -152,16 +148,12 @@ def addTextToImages(script: str, folder: str):
                 image_count[image_name] = 1
             else:
                 image_count[image_name] += 1
-            image_index = images.index(f"{os.getcwd()}\\{image_name}{image_count[image_name]}.png")
+            image_index = images.index(f"{folder}\\{image_name}{image_count[image_name]}.png")
         elif word:
             # Generate the output path and call the image_on_text function
             output_path = f"image_{word_index + 1}.png"
             image_on_text(word, images[image_index], output_path)
             word_index += 1
-
-
-# Add text to images -- Untested (tested only for one image at a time), hope this works.
-script = "[Image of an F1 car] Did you know that the technology used in F1 cars is some of the most advanced in the world? [Image of a car engine] The engines used in F1 cars are designed to be incredibly powerful and efficient. [Image of a car on a track] The aerodynamics of F1 cars are also incredibly advanced, allowing them to reach incredible speeds. [Image of a car on a track] So next time you see an F1 car, remember that it's not just a car, it's a work of art. [Image of an F1 car] The technology used in F1 cars is truly amazing. [Image of a car on a track] Stay tuned for more information on the technology of F1 cars. [Image of a car on a track] "
 
 
 def create_video(lpi: float, folder: str, video_name: str):
@@ -189,18 +181,30 @@ def create_video(lpi: float, folder: str, video_name: str):
 
 def create_mp3(script: str, folder: str, file: str, rate: float):
     script = re.sub(r'\[.*?]', '', script)  # Remove image placeholders
-    rate = (1/rate) * 60
+    rate = ((1/rate) * 60 ) - 30
     engine = pyttsx3.init()
     engine.setProperty('rate', rate)
     engine.save_to_file(script, os.path.join(folder, file))
     engine.runAndWait()
 
 
-create_video(length_per_img, folder, "test.mp4")
-create_mp3(script, folder, "test.mp3", length_per_img)
+def compositeVideo(videoFile: str, audioFile: str, bottomVideo: str, finalVideo: str, folder: str, targetWidth: int):
+    videoClip = VideoFileClip(os.path.join(folder, videoFile))
+    audioClip = AudioFileClip(os.path.join(folder, audioFile))
+    finalClip = videoClip.set_audio(audioClip)
 
-videoClip = VideoFileClip("test.mp4")
-audioClip = AudioFileClip("test.mp3")
-finalClip = videoClip.set_audio(audioClip)
+    bottomClip = VideoFileClip(bottomVideo)
+    bottomClip = bottomClip.subclip(40, videoClip.duration + 40)
+    bottomClip = bottomClip.resize(height=videoClip.h // 6)
+    bottomClip = bottomClip.set_audio(None)
 
-finalClip.write_videofile("final.mp4")
+    target_height = int((finalClip.size[1] * targetWidth) / finalClip.size[0])
+    finalClip = finalClip.resize(width=targetWidth, height=target_height/2)
+    bottomClip.resize(width=targetWidth, height=target_height/2)
+    finalClip = CompositeVideoClip([finalClip.set_position(('center', 'top')), bottomClip.set_position(('center', 'bottom'))])
+
+    finalClip.write_videofile(os.path.join(folder, finalVideo))
+
+    videoClip.close()
+    audioClip.close()
+    finalClip.close()
