@@ -7,13 +7,6 @@
 
 https://patorjk.com/software/taag/#p=display&f=USA%20Flag&t=Slopper
 """
-# Fixed a lot the PEP errors & warnings by just ignoring them
-# TODO:
-# Fix:
-# Video maker
-# Test
-# Add menu at start for selecting tag and everything
-
 from langchain_huggingface.llms import HuggingFacePipeline
 from langchain.prompts import PromptTemplate
 import re
@@ -24,8 +17,6 @@ import requests
 import base64
 import pyttsx3
 from PIL import Image, ImageDraw, ImageFont
-from gtts import gTTS
-from pydub import AudioSegment
 from moviepy.editor import VideoFileClip, AudioFileClip, CompositeVideoClip
 
 
@@ -80,19 +71,22 @@ def create_script(model: str, max_new_tokens: int, tag: str) -> str:
     )
 
     prompt = PromptTemplate.from_template("""
-    Instruct: You're going to write a short script for an informational short form video. The video will be about the benefits of drinking water. The script should be 30 seconds long. The target audience is adults who are looking to improve their health. The script should be informative and engaging. The video will be around 30 seconds long. Place prompts for an ai image generator in brackets between text, [like this]. Don't have someone saying the text, simply write the text.
+    Instruct: You're going to write a short script for an informational short form video. The video will be about the benefits of drinking water. The script should be 30 seconds long. The target audience is adults who are looking to improve their health. The script should be informative and engaging. The video will be around 30 seconds long. Place prompts for an ai image generator in brackets between text, [like this]. Don't have someone saying the text, simply write the text. Do not write any code either.
     Output: [Refreshing image of water] Did you know that drinking water for can help you lose weight? [Image of a scale] Water can also help you stay focused and energized throughout the day. [Image of a person working]. So next time you're feeling tired or hungry, try drinking a glass of water. [Image of a person drinking water]. Your body will thank you. [Image of a happy person]. Stay hydrated and stay healthy. [Image of a water bottle].
-    Instruct: "You're goal is to write a short script about for an informational short form video. The video will be about {tag}. The script should be 30 seconds long. The target audience is {tag}. The script should be informative and engaging. The video will be around 30 seconds long. Place prompts for an ai image generator in brackets between text, [like this]. Don't have someone saying the text, simply write the text."
+    Instruct: "You're goal is to write a short script about for an informational short form video. The video will be about {tag}. The script should be 30 seconds long. The target audience is {tag}. The script should be informative and engaging. The video will be around 30 seconds long. Place prompts for an ai image generator in brackets between text, [like this]. Don't have someone saying the text, simply write the text. Do not write any code either."
     Output: """, )
 
     chain = prompt | TextMaker
     script = chain.invoke({"tag": tag})
     script = script.replace(prompt.format(tag=tag), "")
 
+    if script.__contains__("def "):
+        script = create_script(model, max_new_tokens, tag)
+
     return script
 
 
-def create_images(script: str, folder: str):
+def create_images(script: str, folder: str, imageURL: str, steps: int):
     imageList = re.findall(r'\[.*?]', script)
     imageList = [image.replace("[", "").replace("]", "").replace("\"", "") for image in imageList]
     print(script, "\n", imageList)
@@ -104,11 +98,11 @@ def create_images(script: str, folder: str):
         }
         data = {
             "prompt": image,
-            "steps": 5
+            "steps": steps
         }
 
         print(data)
-        response = requests.post(url='http://127.0.0.1:7862/sdapi/v1/txt2img', json=data, headers=headers)
+        response = requests.post(url=f'{imageURL}/sdapi/v1/txt2img', json=data, headers=headers)
 
         if response.status_code == 200:
             base_filename = image.replace(" ", "")
