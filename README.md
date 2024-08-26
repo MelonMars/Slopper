@@ -30,4 +30,4 @@ You then need to run `Slopper.py`. Slopper takes the following arguments:
 
 ## Example
 This is an example video for F1 Cars:
-[![Example video](https://upload.wikimedia.org/wikipedia/commons/thumb/8/8f/Max_Verstappen_2022.jpg/1920px-Max_Verstappen_2022.jpg)](https://streamable.com/u67swo)
+[![Example video](https://upload.wikimedia.org/wikipedia/commons/thumb/8/8f/Max_Verstappen_2022.jpg/1920px-Max_Verstappen_2022.jpg)]([https://streamable.com/u67swo](https://www.youtube.com/watch?v=5CVAb7wuTOE))
